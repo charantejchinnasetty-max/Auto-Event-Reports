@@ -167,6 +167,14 @@ def build_image(df, out_path, event_name):
                 return ImageFont.truetype(str(font_dir / name) if (font_dir / name).exists() else name, size)
             except OSError:
                 pass
+        # Matplotlib includes DejaVu fonts on Linux; no Windows fonts needed.
+        import importlib.util
+        spec = importlib.util.find_spec("matplotlib")
+        if spec and spec.submodule_search_locations:
+            name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+            path = __import__('pathlib').Path(next(iter(spec.submodule_search_locations))) / "mpl-data" / "fonts" / "ttf" / name
+            if path.exists():
+                return ImageFont.truetype(str(path), size)
         return ImageFont.load_default()
     title_lines = textwrap.wrap(event_name, max(20, int((width - 128) / 29))) or ["Class Event"]
     heights = [max(58, 28 * len(textwrap.wrap(b["batch"], 35)) + 20) for b in report["batches"]]

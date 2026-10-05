@@ -6,7 +6,10 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
-import report_engine as eng
+if __package__:
+    from . import report_engine as eng
+else:
+    import report_engine as eng
 
 app = FastAPI(title="Attendance Reports")
 security = HTTPBasic(auto_error=False)

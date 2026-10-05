@@ -1,0 +1,9 @@
+.venv/
+**/__pycache__/
+backup-*/
+*.xlsx
+*.png
+verify_app.py
+verify_frontend.cjs
+redesign.py
+.git/
