@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attendance Reports - Dr. Bhatia Medical Coaching Institute</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--text:#1a1f2b;--muted:#667085;--brand:#1f3864;--line:#d0d5dd;--tot:#d9e1f2}
+@media(prefers-color-scheme:dark){:root{--bg:#12161d;--card:#1b212b;--text:#e8ecf2;--muted:#9aa4b2;--line:#323b4a;--tot:#26324a}}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:var(--brand);color:#fff;padding:16px 24px}header h1{margin:0;font-size:18px}header p{margin:2px 0 0;font-size:13px;opacity:.8}
+main{max-width:1100px;margin:24px auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:20px}
+#drop{border:2px dashed var(--line);border-radius:10px;padding:34px;text-align:center;cursor:pointer;color:var(--muted)}
+#drop.over{border-color:var(--brand);color:var(--text)}
+input[type=text]{width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--text);margin:6px 0 14px}
+button{background:var(--brand);color:#fff;border:0;border-radius:6px;padding:10px 16px;cursor:pointer;font-size:14px;margin-right:8px}
+button:disabled{opacity:.5;cursor:default}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}
+th{background:var(--brand);color:#fff;padding:8px;text-align:center}td{padding:7px 8px;border:1px solid var(--line);text-align:center}
+td:first-child,th:first-child{text-align:left}tr.tot td{background:var(--tot);font-weight:700}
+h2{font-size:16px;margin:0 0 12px}.note{color:var(--muted);font-size:13px;margin-top:10px}
+#err{color:#d92d20;margin-top:10px}.hidden{display:none}
+.stats{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px}.stat{flex:1;min-width:150px;background:var(--bg);border-radius:8px;padding:12px}
+.stat b{display:block;font-size:24px}.stat span{color:var(--muted);font-size:13px}
+</style></head><body>
+<header><h1>Attendance Reports</h1><p>Dr. Bhatia Medical Coaching Institute - upload the class-event export, get the daily &amp; cumulative report</p></header>
+<main>
+<div class="card">
+  <div id="drop">Drop the exported .xlsx here, or click to choose<input id="file" type="file" accept=".xlsx,.xls" hidden></div>
+  <p id="fname" class="note"></p>
+  <label>Event name (shown on the report)</label>
+  <input id="event" type="text" placeholder="e.g. SURGERY PART-2(B)TS">
+  <button id="go" disabled>Generate report &amp; download image</button>
+  <div id="err"></div>
+</div>
+<div id="out" class="hidden">
+  <div class="card"><div class="stats" id="stats"></div>
+    <p class="note">Total scans count a student once for every day they attended. Unique students counts each student once.</p>
+    <button id="png">Download image (PNG)</button><button id="xls">Download Excel</button></div>
+  <div class="card"><h2>Daily attendance (scans per day)</h2><div class="scroll" id="daily"></div></div>
+  <div class="card"><h2>Cumulative attendance (running total)</h2><div class="scroll" id="cum"></div></div>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);let file=null;
+const pick=f=>{file=f;$('fname').textContent=f?f.name:'';$('go').disabled=!f;
+  if(f&&!$('event').value)$('event').value=f.name.replace(/\.xlsx?$/i,'').replace(/[_]+/g,' ').trim();};
+$('drop').onclick=()=>$('file').click();$('file').onchange=e=>pick(e.target.files[0]);
+$('drop').ondragover=e=>{e.preventDefault();$('drop').classList.add('over')};
+$('drop').ondragleave=()=>$('drop').classList.remove('over');
+$('drop').ondrop=e=>{e.preventDefault();$('drop').classList.remove('over');pick(e.dataTransfer.files[0])};
+const body=()=>{const f=new FormData();f.append('file',file);f.append('event_name',$('event').value||'Class Event');return f};
+async function call(url){const r=await fetch(url,{method:'POST',body:body()});
+  if(!r.ok){let m='Server error ('+r.status+')';try{m=(await r.json()).detail||m}catch(e){}throw new Error(m)}return r}
+function table(days,rows,totRow,extraCol){
+  let h='<table><tr><th>Batch</th>'+days.map((d,i)=>`<th>Day ${i+1}<br><small>${d.slice(0,5)}</small></th>`).join('')+(extraCol?'<th>Total</th>':'')+'</tr>';
+  rows.forEach(r=>h+=`<tr><td>${r.name}</td>`+r.v.map(x=>`<td>${x}</td>`).join('')+(extraCol?`<td>${r.t}</td>`:'')+'</tr>');
+  h+='<tr class="tot"><td>Grand Total</td>'+totRow.v.map(x=>`<td>${x}</td>`).join('')+(extraCol?`<td>${totRow.t}</td>`:'')+'</tr>';
+  return h+'</table>'}
+$('go').onclick=async()=>{$('err').textContent='';$('go').disabled=true;$('go').textContent='Working...';
+  try{const d=await(await call('/api/analyze')).json();
+    $('stats').innerHTML=`<div class="stat"><b>${d.days.length}</b><span>Event days</span></div>
+      <div class="stat"><b>${d.grand_total}</b><span>Total scans</span></div>
+      <div class="stat"><b>${d.unique_overall}</b><span>Unique students</span></div>`;
+    $('daily').innerHTML=table(d.days,d.batches.map(b=>({name:b.batch,v:b.daily,t:b.total})),{v:d.total_daily,t:d.grand_total},true)
+      +`<p class="note">Unique students per day: ${d.unique_daily.join(' / ')}</p>`;
+    $('cum').innerHTML=table(d.days,d.batches.map(b=>({name:b.batch,v:b.cumulative})),{v:d.total_cumulative},false);
+    $('out').classList.remove('hidden');
+    await dl('/api/image',($('event').value||'report')+'.png',$('png'))}
+  catch(e){$('err').textContent=e.message}
+  $('go').disabled=false;$('go').textContent='Generate report & download image'};
+async function dl(url,name,btn){const t=btn.textContent;btn.disabled=true;btn.textContent='Preparing...';
+  try{const b=await(await call(url)).blob();const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click()}
+  catch(e){$('err').textContent=e.message}btn.disabled=false;btn.textContent=t}
+$('png').onclick=()=>dl('/api/image',($('event').value||'report')+'.png',$('png'));
+$('xls').onclick=()=>dl('/api/excel',($('event').value||'report')+'.xlsx',$('xls'));
+</script></body></html>

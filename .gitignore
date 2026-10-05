@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+# student data must never be committed
+*.xlsx
+*.xls
+*.png
